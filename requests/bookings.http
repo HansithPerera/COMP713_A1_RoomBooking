@@ -1,0 +1,143 @@
+### Room Booking API - manual test requests
+### Open in VS Code with the "REST Client" extension (humao.rest-client),
+### start the server (uvicorn main:app --reload), then click "Send Request"
+### above each request. Run them top to bottom.
+
+@baseUrl = http://localhost:8000
+# Dates are calculated when the request is sent, so they are always valid
+@tomorrow = {{$datetime "YYYY-MM-DD" 1 d}}
+@yesterday = {{$datetime "YYYY-MM-DD" -1 d}}
+
+
+### 1. List rooms -> 200
+GET {{baseUrl}}/api/rooms
+
+
+### 2. SUCCESS: create a booking -> 201 Created
+# @name createBooking
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Alice",
+  "date": "{{tomorrow}}",
+  "start_hour": 10,
+  "end_hour": 12
+}
+
+
+### 3. List bookings for room 1 tomorrow -> 200
+GET {{baseUrl}}/api/rooms/1/bookings?date={{tomorrow}}
+
+
+### 4. INVALID INPUT: blank name -> 400
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "   ",
+  "date": "{{tomorrow}}",
+  "start_hour": 13,
+  "end_hour": 14
+}
+
+
+### 5. INVALID INPUT: date in the past -> 400
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Alice",
+  "date": "{{yesterday}}",
+  "start_hour": 13,
+  "end_hour": 14
+}
+
+
+### 6. INVALID INPUT: end_hour before start_hour -> 400
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Alice",
+  "date": "{{tomorrow}}",
+  "start_hour": 15,
+  "end_hour": 14
+}
+
+
+### 7. INVALID INPUT: outside opening hours (8-22) -> 400
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Alice",
+  "date": "{{tomorrow}}",
+  "start_hour": 6,
+  "end_hour": 9
+}
+
+
+### 8. INVALID INPUT: bad date in query string -> 400
+GET {{baseUrl}}/api/rooms/1/bookings?date=2030-13-45
+
+
+### 9. NOT FOUND: booking an unknown room -> 404
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 999,
+  "booker_name": "Alice",
+  "date": "{{tomorrow}}",
+  "start_hour": 10,
+  "end_hour": 12
+}
+
+
+### 10. NOT FOUND: bookings for an unknown room -> 404
+GET {{baseUrl}}/api/rooms/999/bookings?date={{tomorrow}}
+
+
+### 11. CONFLICT: overlaps request 2 (10-12) -> 409
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Bob",
+  "date": "{{tomorrow}}",
+  "start_hour": 11,
+  "end_hour": 13
+}
+
+
+### 12. ADJACENT is allowed: 12-14 right after 10-12 -> 201
+# @name adjacentBooking
+POST {{baseUrl}}/api/bookings
+Content-Type: application/json
+
+{
+  "room_id": 1,
+  "booker_name": "Bob",
+  "date": "{{tomorrow}}",
+  "start_hour": 12,
+  "end_hour": 14
+}
+
+
+### 13. DELETE: cancel the booking from request 2 -> 204 No Content
+DELETE {{baseUrl}}/api/bookings/{{createBooking.response.body.$.id}}
+
+
+### 14. DELETE again: it no longer exists -> 404
+DELETE {{baseUrl}}/api/bookings/{{createBooking.response.body.$.id}}
+
+
+### 15. Clean up: cancel the adjacent booking from request 12 -> 204
+DELETE {{baseUrl}}/api/bookings/{{adjacentBooking.response.body.$.id}}
