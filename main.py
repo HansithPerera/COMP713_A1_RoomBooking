@@ -2,10 +2,13 @@
 
 No SQL and no business rules here; those live in service.py / repository.py.
 """
+import sqlite3
 from typing import Any
 
 from fastapi import Body, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import service
 from db import init_db
@@ -40,6 +43,37 @@ def handle_not_found(request: Request, exc: service.NotFoundError):
 @app.exception_handler(service.ConflictError)
 def handle_conflict(request: Request, exc: service.ConflictError):
     return error_response(409, str(exc))
+
+
+@app.exception_handler(sqlite3.Error)
+def handle_database_error(request: Request, exc: sqlite3.Error):
+    # Log the real cause on the server console only; the client gets a
+    # generic message so internal details (paths, SQL) are never leaked.
+    print(f"[error] database error on {request.method} {request.url.path}: "
+          f"{type(exc).__name__}: {exc}")
+    return error_response(503, "Database unavailable, please try again later")
+
+
+@app.exception_handler(RequestValidationError)
+def handle_bad_request(request: Request, exc: RequestValidationError):
+    # FastAPI raises this for malformed JSON or a non-numeric id in the URL.
+    # By default it returns 422 in its own format; we use 400 + our shape.
+    first = exc.errors()[0]
+    where = ".".join(str(part) for part in first["loc"])
+    return error_response(400, f"Invalid request ({where}): {first['msg']}")
+
+
+@app.exception_handler(StarletteHTTPException)
+def handle_http_error(request: Request, exc: StarletteHTTPException):
+    # e.g. 404 for an unknown URL or 405 for a wrong HTTP method
+    return error_response(exc.status_code, str(exc.detail))
+
+
+@app.exception_handler(Exception)
+def handle_unexpected_error(request: Request, exc: Exception):
+    print(f"[error] unexpected error on {request.method} {request.url.path}: "
+          f"{type(exc).__name__}: {exc}")
+    return error_response(500, "Internal server error")
 
 
 # ---------------------------------------------------------------------------
