@@ -33,9 +33,32 @@ def find_bookings(room_id: int, booking_date: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def insert_booking(booking: dict) -> dict:
-    """Insert a booking and return it with its new id."""
+def insert_booking_if_free(booking: dict) -> dict | None:
+    """Insert the booking unless it overlaps an existing one.
+
+    Returns the new booking (with its id), or None if the slot is taken.
+
+    Concurrency: several clients (browsers, API tools) share one database.
+    If we checked for overlaps and inserted in two separate steps, two
+    clients could both see the slot as free and both insert = double booking.
+    "BEGIN IMMEDIATE" takes SQLite's write lock *before* the check, so a
+    second client's transaction waits until ours commits, and its overlap
+    check then sees our booking. Check + insert happen as one atomic unit.
+    """
     with get_connection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+
+        # Two time ranges overlap when each starts before the other ends.
+        # Adjacent bookings (10-12 and 12-14) do NOT overlap.
+        clash = conn.execute(
+            "SELECT id FROM bookings "
+            "WHERE room_id = ? AND date = ? AND start_hour < ? AND end_hour > ?",
+            (booking["room_id"], booking["date"],
+             booking["end_hour"], booking["start_hour"]),
+        ).fetchone()
+        if clash:
+            return None  # leaving the with-block ends the transaction
+
         cursor = conn.execute(
             "INSERT INTO bookings (room_id, booker_name, date, start_hour, end_hour) "
             "VALUES (?, ?, ?, ?, ?)",

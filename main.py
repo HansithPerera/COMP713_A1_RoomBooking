@@ -37,6 +37,11 @@ def handle_not_found(request: Request, exc: service.NotFoundError):
     return error_response(404, str(exc))
 
 
+@app.exception_handler(service.ConflictError)
+def handle_conflict(request: Request, exc: service.ConflictError):
+    return error_response(409, str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------

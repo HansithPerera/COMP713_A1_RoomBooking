@@ -112,4 +112,9 @@ def get_bookings(room_id: int, date_text) -> list[dict]:
 def create_booking(payload) -> dict:
     booking = validate_booking(payload)
     _require_room(booking["room_id"])
-    return repository.insert_booking(booking)
+    created = repository.insert_booking_if_free(booking)
+    if created is None:
+        raise ConflictError(
+            "This room is already booked for part of that time"
+        )
+    return created
