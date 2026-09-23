@@ -5,11 +5,13 @@ No SQL and no business rules here; those live in service.py / repository.py.
 import sqlite3
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 import service
@@ -126,3 +128,9 @@ def create_booking(payload: Any = Body(default=None)):
 def cancel_booking(booking_id: int):
     service.cancel_booking(booking_id)
     return Response(status_code=204)  # 204 No Content: success, empty body
+
+
+# Serve the browser client (static/index.html) at http://localhost:8000/
+# Mounted last so the /api routes above take priority.
+STATIC_DIR = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

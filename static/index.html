@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Room Booking</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { margin-bottom: 0.2rem; }
+    section { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    label { display: inline-block; margin: 0.3rem 1rem 0.3rem 0; }
+    input, select, button { font: inherit; padding: 0.3rem 0.5rem; }
+    button { cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; }
+    th, td { text-align: left; padding: 0.4rem; border-bottom: 1px solid #eee; }
+    #message { padding: 0.6rem; border-radius: 6px; min-height: 1.2rem; }
+    #message.success { background: #e6f6e6; color: #1a7f1a; }
+    #message.error   { background: #fdeaea; color: #c62828; }
+    #message.network { background: #fff4e0; color: #8a5a00; }
+  </style>
+</head>
+<body>
+  <h1>Room Booking</h1>
+  <p>Pick a room and a date to see its bookings.</p>
+
+  <!-- Success / error messages from the server appear here -->
+  <div id="message"></div>
+
+  <section>
+    <label>Room
+      <select id="room"></select>
+    </label>
+    <label>Date
+      <input type="date" id="date">
+    </label>
+    <button id="show-btn">Show bookings</button>
+
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Booked by</th></tr>
+      </thead>
+      <tbody id="bookings"></tbody>
+    </table>
+  </section>
+
+  <script>
+    const roomSelect = document.getElementById("room");
+    const dateInput = document.getElementById("date");
+    const bookingsBody = document.getElementById("bookings");
+    const messageBox = document.getElementById("message");
+
+    // kind is "success" (green), "error" (red) or "network" (orange)
+    function showMessage(text, kind) {
+      messageBox.textContent = text;
+      messageBox.className = kind;
+    }
+
+    // Send one HTTP request to the API.
+    // Returns the parsed JSON body on success (2xx), or null on failure.
+    // Failures are shown to the user in two different ways:
+    //   - network failure: no response at all (e.g. server stopped)
+    //   - HTTP error: the server answered with 4xx/5xx and {"error": "..."}
+    async function callApi(method, url, body) {
+      const options = { method: method, headers: {} };
+      if (body !== undefined) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+
+      let response;
+      try {
+        response = await fetch(url, options);
+      } catch (err) {
+        // fetch() only throws when no HTTP response arrived at all
+        showMessage("Cannot reach the server. Is it running? (network error)", "network");
+        return null;
+      }
+
+      // 204 No Content has no body to parse
+      const data = response.status === 204 ? {} : await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const text = data.error || response.statusText;
+        showMessage(`Error ${response.status}: ${text}`, "error");
+        return null;
+      }
+      return data;
+    }
+
+    // 9 -> "09:00"
+    function formatHour(hour) {
+      return String(hour).padStart(2, "0") + ":00";
+    }
+
+    // Fill the room dropdown from GET /api/rooms
+    async function loadRooms() {
+      const rooms = await callApi("GET", "/api/rooms");
+      if (rooms === null) return;
+      roomSelect.innerHTML = "";
+      for (const room of rooms) {
+        const option = document.createElement("option");
+        option.value = room.id;
+        option.textContent = `${room.name} (capacity ${room.capacity})`;
+        roomSelect.appendChild(option);
+      }
+    }
+
+    // Show the bookings table for the selected room and date
+    async function loadBookings() {
+      const url = `/api/rooms/${roomSelect.value}/bookings?date=${dateInput.value}`;
+      const bookings = await callApi("GET", url);
+      if (bookings === null) return;
+
+      bookingsBody.innerHTML = "";
+      if (bookings.length === 0) {
+        bookingsBody.innerHTML = "<tr><td colspan='2'>No bookings for this day.</td></tr>";
+        return;
+      }
+      for (const b of bookings) {
+        const row = document.createElement("tr");
+        // textContent (not innerHTML) so a name can never inject HTML
+        const time = document.createElement("td");
+        time.textContent = `${formatHour(b.start_hour)} - ${formatHour(b.end_hour)}`;
+        const name = document.createElement("td");
+        name.textContent = b.booker_name;
+        row.append(time, name);
+        bookingsBody.appendChild(row);
+      }
+    }
+
+    document.getElementById("show-btn").addEventListener("click", loadBookings);
+
+    // On page load: default the date to today, load rooms, then bookings
+    async function start() {
+      dateInput.value = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local time
+      await loadRooms();
+      if (roomSelect.value) await loadBookings();
+    }
+    start();
+  </script>
+</body>
+</html>
