@@ -37,10 +37,29 @@
 
     <table>
       <thead>
-        <tr><th>Time</th><th>Booked by</th></tr>
+        <tr><th>Time</th><th>Booked by</th><th></th></tr>
       </thead>
       <tbody id="bookings"></tbody>
     </table>
+  </section>
+
+  <section>
+    <h2>Make a booking</h2>
+    <p>Uses the room and date selected above. Hours are whole numbers (8 to 22).</p>
+    <!-- novalidate: no browser-side checks, so the server's validation
+         (and its 400 error messages) can be seen and demonstrated -->
+    <form id="booking-form" novalidate>
+      <label>Your name
+        <input type="text" id="name">
+      </label>
+      <label>Start hour
+        <input type="number" id="start-hour" value="10" style="width: 5rem">
+      </label>
+      <label>End hour
+        <input type="number" id="end-hour" value="11" style="width: 5rem">
+      </label>
+      <button type="submit">Book</button>
+    </form>
   </section>
 
   <script>
@@ -56,7 +75,7 @@
     }
 
     // Send one HTTP request to the API.
-    // Returns the parsed JSON body on success (2xx), or null on failure.
+    // Returns { status, data } on success (2xx), or null on failure.
     // Failures are shown to the user in two different ways:
     //   - network failure: no response at all (e.g. server stopped)
     //   - HTTP error: the server answered with 4xx/5xx and {"error": "..."}
@@ -84,7 +103,7 @@
         showMessage(`Error ${response.status}: ${text}`, "error");
         return null;
       }
-      return data;
+      return { status: response.status, data: data };
     }
 
     // 9 -> "09:00"
@@ -94,10 +113,10 @@
 
     // Fill the room dropdown from GET /api/rooms
     async function loadRooms() {
-      const rooms = await callApi("GET", "/api/rooms");
-      if (rooms === null) return;
+      const result = await callApi("GET", "/api/rooms");
+      if (result === null) return;
       roomSelect.innerHTML = "";
-      for (const room of rooms) {
+      for (const room of result.data) {
         const option = document.createElement("option");
         option.value = room.id;
         option.textContent = `${room.name} (capacity ${room.capacity})`;
@@ -108,12 +127,13 @@
     // Show the bookings table for the selected room and date
     async function loadBookings() {
       const url = `/api/rooms/${roomSelect.value}/bookings?date=${dateInput.value}`;
-      const bookings = await callApi("GET", url);
-      if (bookings === null) return;
+      const result = await callApi("GET", url);
+      if (result === null) return;
+      const bookings = result.data;
 
       bookingsBody.innerHTML = "";
       if (bookings.length === 0) {
-        bookingsBody.innerHTML = "<tr><td colspan='2'>No bookings for this day.</td></tr>";
+        bookingsBody.innerHTML = "<tr><td colspan='3'>No bookings for this day.</td></tr>";
         return;
       }
       for (const b of bookings) {
@@ -123,12 +143,49 @@
         time.textContent = `${formatHour(b.start_hour)} - ${formatHour(b.end_hour)}`;
         const name = document.createElement("td");
         name.textContent = b.booker_name;
-        row.append(time, name);
+
+        const action = document.createElement("td");
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "Cancel";
+        cancelBtn.addEventListener("click", () => cancelBooking(b.id));
+        action.appendChild(cancelBtn);
+
+        row.append(time, name, action);
         bookingsBody.appendChild(row);
       }
     }
 
+    // Create a booking with POST /api/bookings, then refresh the table
+    async function createBooking(event) {
+      event.preventDefault(); // stop the browser from reloading the page
+      const booking = {
+        room_id: Number(roomSelect.value),
+        booker_name: document.getElementById("name").value,
+        date: dateInput.value,
+        start_hour: Number(document.getElementById("start-hour").value),
+        end_hour: Number(document.getElementById("end-hour").value),
+      };
+      const result = await callApi("POST", "/api/bookings", booking);
+      if (result === null) return; // error message already shown
+      const b = result.data;
+      showMessage(
+        `Booked ${formatHour(b.start_hour)} - ${formatHour(b.end_hour)} ` +
+        `for ${b.booker_name} (HTTP ${result.status}, booking id ${b.id})`,
+        "success"
+      );
+      await loadBookings();
+    }
+
+    // Cancel a booking with DELETE /api/bookings/{id}, then refresh the table
+    async function cancelBooking(bookingId) {
+      const result = await callApi("DELETE", `/api/bookings/${bookingId}`);
+      if (result === null) return;
+      showMessage(`Booking ${bookingId} cancelled (HTTP ${result.status})`, "success");
+      await loadBookings();
+    }
+
     document.getElementById("show-btn").addEventListener("click", loadBookings);
+    document.getElementById("booking-form").addEventListener("submit", createBooking);
 
     // On page load: default the date to today, load rooms, then bookings
     async function start() {
