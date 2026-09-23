@@ -118,3 +118,8 @@ def create_booking(payload) -> dict:
             "This room is already booked for part of that time"
         )
     return created
+
+
+def cancel_booking(booking_id: int) -> None:
+    if not repository.delete_booking(booking_id):
+        raise NotFoundError(f"Booking {booking_id} not found")

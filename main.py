@@ -5,7 +5,7 @@ No SQL and no business rules here; those live in service.py / repository.py.
 from typing import Any
 
 from fastapi import Body, FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 import service
 from db import init_db
@@ -62,3 +62,9 @@ def list_bookings(room_id: int, date: str | None = None):
 def create_booking(payload: Any = Body(default=None)):
     # The raw JSON body is passed to the service, which does all validation
     return service.create_booking(payload)
+
+
+@app.delete("/api/bookings/{booking_id}", status_code=204)
+def cancel_booking(booking_id: int):
+    service.cancel_booking(booking_id)
+    return Response(status_code=204)  # 204 No Content: success, empty body

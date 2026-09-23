@@ -67,3 +67,11 @@ def insert_booking_if_free(booking: dict) -> dict | None:
         )
         new_id = cursor.lastrowid
     return {"id": new_id, **booking}
+
+
+def delete_booking(booking_id: int) -> bool:
+    """Delete a booking. Returns True if a row was deleted, False if none."""
+    with get_connection() as conn:
+        cursor = conn.execute("DELETE FROM bookings WHERE id = ?", (booking_id,))
+        deleted = cursor.rowcount > 0
+    return deleted
