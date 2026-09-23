@@ -1,6 +1,7 @@
 """Database connection and schema setup (data-persistence layer)."""
 import os
 import sqlite3
+from contextlib import contextmanager
 
 # Configurable so the marker (or a failure demo) can point to another file.
 DB_PATH = os.environ.get("BOOKING_DB_PATH", "booking.db")
@@ -26,12 +27,26 @@ CREATE TABLE IF NOT EXISTS bookings (
 SEED_ROOMS = [("Study Room A", 4), ("Study Room B", 6), ("Seminar Room", 20)]
 
 
-def get_connection() -> sqlite3.Connection:
-    """Open a short-lived connection for one unit of work."""
+@contextmanager
+def get_connection():
+    """Open a short-lived connection for one unit of work.
+
+    Usage: `with get_connection() as conn: ...`
+    Commits if the block succeeds, rolls back if it raises, and always
+    closes the connection so no file handles are left open.
+    """
+    # timeout=5: wait up to 5 s if another client holds the write lock
     conn = sqlite3.connect(DB_PATH, timeout=5)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")  # SQLite needs this for FKs
-    return conn
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")  # SQLite needs this for FKs
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:

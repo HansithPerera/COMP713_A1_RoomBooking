@@ -5,6 +5,8 @@ custom exceptions below; main.py turns each one into an HTTP status code.
 """
 from datetime import date, datetime
 
+import repository
+
 # Business rules
 OPENING_HOUR = 8       # earliest start hour (08:00)
 CLOSING_HOUR = 22      # latest end hour (22:00)
@@ -82,3 +84,32 @@ def validate_booking(payload) -> dict:
         "start_hour": start_hour,
         "end_hour": end_hour,
     }
+
+
+# ---------------------------------------------------------------------------
+# Use cases called by main.py
+# ---------------------------------------------------------------------------
+
+def list_rooms() -> list[dict]:
+    return repository.find_all_rooms()
+
+
+def _require_room(room_id: int) -> dict:
+    """Return the room, or raise NotFoundError if it does not exist."""
+    room = repository.find_room_by_id(room_id)
+    if room is None:
+        raise NotFoundError(f"Room {room_id} not found")
+    return room
+
+
+def get_bookings(room_id: int, date_text) -> list[dict]:
+    """Bookings for one room on one date (past dates may be viewed)."""
+    booking_date = parse_date(date_text)
+    _require_room(room_id)
+    return repository.find_bookings(room_id, booking_date.isoformat())
+
+
+def create_booking(payload) -> dict:
+    booking = validate_booking(payload)
+    _require_room(booking["room_id"])
+    return repository.insert_booking(booking)
