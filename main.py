@@ -3,6 +3,8 @@
 No SQL and no business rules here; those live in service.py / repository.py.
 """
 import sqlite3
+import time
+from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Body, FastAPI, Request
@@ -13,12 +15,35 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 import service
 from db import init_db
 
-app = FastAPI(title="Room Booking API")
 
 
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Runs once when the server starts (code before yield) and stops."""
+    try:
+        init_db()
+    except sqlite3.Error as exc:
+        # Keep the server running: requests will get a clean 503 response
+        # instead of the whole server failing to start.
+        print(f"[error] could not initialise database: {exc}")
+    yield
+
+
+app = FastAPI(title="Room Booking API", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Print one line per request: method, path, status code, duration."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    path = request.url.path
+    if request.url.query:
+        path += "?" + request.url.query
+    print(f"[http] {request.method} {path} -> {response.status_code} "
+          f"({duration_ms:.1f} ms)")
+    return response
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +107,6 @@ def handle_unexpected_error(request: Request, exc: Exception):
 
 @app.get("/api/rooms")
 def list_rooms():
-    print("[api] GET /api/rooms")
     return service.list_rooms()
 
 
