@@ -265,29 +265,29 @@ tested**, **Partially completed**, **Not completed**.
 
 ### Client – `static/index.html`
 
-The HTTP requests the page sends were replayed against a live server with
-`curl`, and all returned the expected status codes. The JavaScript passes a
-syntax check (`node --check`). There are no automated browser tests.
+There are no automated browser tests. The page was checked by hand in a
+browser against the running server, following the README's manual steps and
+error demonstrations: book, cancel, 400 (blank name, bad hours, past date),
+404 (stale Cancel in a second window), 409 (overlapping booking), 503 (server
+started with a missing database folder), network error (server stopped) and
+the two-window double-booking demo. All behaved as expected, and each request
+appeared as an `[http] ...` line in the server console.
 
 | Function | Status | Evidence |
 |----------|--------|----------|
-| `callApi()` (fetch, HTTP-error vs network-error handling) | Completed but only partially tested | Code reviewed and syntax-checked. Not yet exercised in a browser. |
-| `showMessage()` (green / red / orange messages) | Completed but only partially tested | As above |
-| `formatHour()` | Completed but only partially tested | As above |
-| `loadRooms()` (room dropdown) | Completed but only partially tested | The API call it makes (`GET /api/rooms`) is tested. The page itself has not been run in a browser yet. |
-| `loadBookings()` (bookings table with Cancel buttons) | Completed but only partially tested | The API call is tested. The page has not been run in a browser yet. |
-| `createBooking()` (booking form → POST, refresh table) | Completed but only partially tested | The API call is tested. The page has not been run in a browser yet. |
-| `cancelBooking()` (Cancel → DELETE, refresh table) | Completed but only partially tested | The API call is tested. The page has not been run in a browser yet. |
-
-> **To do before submitting:** after carrying out the manual browser steps in
-> the README (book, cancel, each error, server stopped, two windows), change
-> these rows to "Completed and tested" and note "manual browser check".
+| `callApi()` (fetch, HTTP-error vs network-error handling) | Completed and tested | Manual browser check: HTTP errors shown in red with status code; stopped server shown as the separate orange network message |
+| `showMessage()` (green / red / orange messages) | Completed and tested | Manual browser check |
+| `formatHour()` | Completed and tested | Manual browser check (times shown as `10:00 - 12:00`) |
+| `loadRooms()` (room dropdown) | Completed and tested | Manual browser check; API call also covered by `test_list_rooms_returns_200_and_seeded_rooms` |
+| `loadBookings()` (bookings table with Cancel buttons) | Completed and tested | Manual browser check; API call also covered by the GET bookings tests |
+| `createBooking()` (booking form → POST, refresh table) | Completed and tested | Manual browser check (201, 400, 409 cases); API call also covered by the POST tests |
+| `cancelBooking()` (Cancel → DELETE, refresh table) | Completed and tested | Manual browser check (204, and 404 from a stale second window); API call also covered by the DELETE tests |
 
 ### Test tooling
 
 | Item | Status | Evidence |
 |------|--------|----------|
 | `tests/test_api.py` | Completed and tested | 38 tests pass (section 1). They also pass from a fresh clone of the GitHub repository with a new virtual environment. |
-| `requests/bookings.http` | Completed and tested | All 15 requests were replayed against a live server by a script that reads the file, and each returned the status written in its comment. The file has not yet been run inside VS Code with the REST Client extension itself. |
+| `requests/bookings.http` | Completed and tested | All 15 requests were replayed against a live server by a script that reads the file, and each returned the status written in its comment. All 15 requests were also run manually in VS Code with the REST Client extension, and each returned the expected status. |
 
 No functions are "Partially completed" or "Not completed".
